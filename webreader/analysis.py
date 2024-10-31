@@ -3,10 +3,11 @@ from typing import Dict, Any, List
 from webreader.prompts import WEBSITE_SUMMARY_PROMPT
 import json
 
-client = OpenAI()
 
 
 def get_gpt_response(chat_history: List[Dict[str, Any]]) -> str:
+    client = OpenAI()
+
     response = client.chat.completions.create(
         model="gpt-4o",
         messages=chat_history,
@@ -16,6 +17,8 @@ def get_gpt_response(chat_history: List[Dict[str, Any]]) -> str:
     return response
 
 def get_website_summary(formatted_website_data: str) -> str:
+    client = OpenAI()
+
     response = client.chat.completions.create(
         model="gpt-4o",
         messages=[

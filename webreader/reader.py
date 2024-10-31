@@ -4,6 +4,8 @@ from typing import Dict, Set, Optional
 from urllib.parse import urljoin, urlparse
 from playwright.async_api import async_playwright, Page, Browser
 import re
+import logging
+from datetime import datetime
 
 class WebsiteReader:
     def __init__(self, base_url: str):
@@ -20,15 +22,15 @@ class WebsiteReader:
         # Get text content from important elements
         content = {
             'title': await page.title(),
-            'headings': await page.eval_on_selector_all('h1, h2, h3', """
+            'headings': list(set(await page.eval_on_selector_all('h1, h2, h3', """
                 elements => elements.map(e => e.textContent.trim()).filter(text => text.length > 0)
-            """),
-            'paragraphs': await page.eval_on_selector_all('p', """
+            """))),
+            'paragraphs': list(set(await page.eval_on_selector_all('p', """
                 elements => elements.map(e => e.textContent.trim()).filter(text => text.length > 0)
-            """),
-            'lists': await page.eval_on_selector_all('ul, ol', """
+            """))),
+            'lists': list(set(await page.eval_on_selector_all('ul, ol', """
                 elements => elements.map(e => e.textContent.trim()).filter(text => text.length > 0)
-            """)
+            """)))
         }
         
         return content
@@ -48,29 +50,63 @@ class WebsiteReader:
         
         return valid_links
 
-    async def crawl_page(self, page: Page, url: str, max_depth: int = 3, current_depth: int = 0):
+    async def crawl_page(self, page: Page, url: str, max_depth: int = 2, current_depth: int = 0):
         """Crawl a single page and its links up to max_depth."""
         if current_depth >= max_depth or url in self.visited_urls:
             return
 
+        start_time = datetime.now()
+        logging.info(f"Starting crawl of {url} at depth {current_depth}")
+
         try:
-            await page.goto(url, wait_until='domcontentloaded')
+            # Add timeout and catch navigation errors
+            await page.goto(url, wait_until='domcontentloaded', timeout=30000)
             self.visited_urls.add(url)
             
-            # Extract content from current page
-            content = await self.extract_text_content(page, url)
-            self.content_data[url] = content
-            
-            # Get valid links and crawl them
-            valid_links = await self.get_valid_links(page)
-            for link in valid_links:
-                await self.crawl_page(page, link, max_depth, current_depth + 1)
+            try:
+                # Extract content with timeout and error handling
+                content = await asyncio.wait_for(
+                    self.extract_text_content(page, url),
+                    timeout=30.0
+                )
+                self.content_data[url] = content
+                logging.info(f"Successfully extracted content from {url} ({len(content.get('paragraphs', []))} paragraphs)")
+                
+                # Get valid links with timeout and error handling
+                valid_links = await asyncio.wait_for(
+                    self.get_valid_links(page),
+                    timeout=30.0
+                )
+                logging.info(f"Found {len(valid_links)} valid links on {url}")
+                
+                for link in valid_links:
+                    await self.crawl_page(page, link, max_depth, current_depth + 1)
+                    
+            except asyncio.TimeoutError:
+                logging.error(f"Timeout while processing content for {url} after {(datetime.now() - start_time).total_seconds():.1f}s")
+            except Exception as e:
+                logging.error(f"Error extracting content from {url}: {str(e)}", exc_info=True)
                 
         except Exception as e:
-            print(f"Error crawling {url}: {str(e)}")
+            logging.error(f"Error navigating to {url}: {str(e)}", exc_info=True)
+            # Add the URL to visited to prevent retries
+            self.visited_urls.add(url)
+        finally:
+            duration = (datetime.now() - start_time).total_seconds()
+            logging.info(f"Finished processing {url} in {duration:.1f}s")
 
     async def read_website(self, max_depth: int = 3, output_file: str = 'website_content.json'):
         """Main method to read website content."""
+        # Add logging configuration
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(levelname)s - %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'
+        )
+        
+        logging.info(f"Starting website crawl of {self.base_url} with max_depth={max_depth}")
+        start_time = datetime.now()
+        
         async with async_playwright() as playwright:
             browser: Browser = await playwright.chromium.launch(headless=True)
             context = await browser.new_context()
@@ -82,7 +118,11 @@ class WebsiteReader:
                 # Save the collected data to a JSON file
                 with open(output_file, 'w', encoding='utf-8') as f:
                     json.dump(self.content_data, f, indent=2, ensure_ascii=False)
-                    
+                
+                duration = (datetime.now() - start_time).total_seconds()
+                logging.info(f"Crawl completed in {duration:.1f}s. Processed {len(self.visited_urls)} pages.")
+                logging.info(f"Results saved to {output_file}")
+                
             finally:
                 await browser.close()
 

@@ -1,3 +1,4 @@
+import os
 import time
 import random
 import streamlit as st
@@ -47,10 +48,25 @@ with st.sidebar:
         st.session_state.website_data = None
         st.sidebar.empty()
         
+    openai_api_key = st.text_input("OpenAI API Key:")
+    if st.button("Save API Key"):
+        if openai_api_key:
+            os.environ["OPENAI_API_KEY"] = openai_api_key
+            st.sidebar.success("API Key saved successfully!")
+        else:
+            st.sidebar.error("Please enter your OpenAI API key.")
 
     website_url = st.text_input("Enter a website URL:")
 
-    if st.button("Generate summary"):
+# Display chat history
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.write(message["content"])
+
+if st.sidebar.button("Generate summary"):
+    if not os.environ["OPENAI_API_KEY"]:
+        st.error("Please enter your OpenAI API key.")
+    else:
         with st.spinner("Getting website data..."):
             website_data = get_data(website_url)
         st.sidebar.success("Website data retrieved successfully!")
@@ -73,27 +89,21 @@ with st.sidebar:
             
             message_placeholder.markdown(full_response)
 
-
         st.session_state.internal_messages.append({
             "role": "assistant",
-            "content": website_data
+            "content": full_response
         })
 
         st.session_state.internal_messages.append({
             "role": "assistant",
-            "content": website_summary
+            "content": full_response
         })
 
         st.session_state.messages.append({
             "role": "assistant",
-            "content": website_summary
+            "content": full_response
         })
 
-
-# Display chat history
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.write(message["content"])
 
 # Chat input
 if user_input := st.chat_input("How can I help you?"):
