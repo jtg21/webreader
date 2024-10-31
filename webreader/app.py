@@ -9,8 +9,13 @@ from webreader.reader import read_website
 from webreader.analysis import get_website_summary, get_gpt_response
 from webreader.utils import format_website_data
 
-os.system('playwright install')
-os.system('playwright install-deps')
+def check_playwright_installed() -> bool:
+    try:
+        import playwright
+        return True
+    except ImportError:
+        os.system('playwright install')
+        os.system('playwright install-deps')
 
 # Get the website data
 def get_data(url: str) -> str:
@@ -27,6 +32,11 @@ def get_summary(formatted_data: str) -> str:
 def get_response() -> str:
     internal_messages = st.session_state.internal_messages
     return get_gpt_response(internal_messages)
+
+# On startup, check if playwright is installed
+if not "startup_check" in st.session_state:
+    check_playwright_installed()
+    st.session_state.startup_check = True
 
 # Initialize session state for chat history
 if "messages" not in st.session_state:
