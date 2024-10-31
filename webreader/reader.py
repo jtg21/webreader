@@ -1,11 +1,18 @@
-import asyncio
-import json
-from typing import Dict, Set, Optional
-from urllib.parse import urljoin, urlparse
-from playwright.async_api import async_playwright, Page, Browser
 import re
+import os
+import json
+import asyncio
 import logging
+
+from urllib.parse import urljoin, urlparse
+from typing import Dict, Set, Optional
 from datetime import datetime
+
+try:
+    from playwright.async_api import async_playwright, Page, Browser
+except ImportError:
+    os.system('playwright install')
+    os.system('playwright install-deps')
 
 class WebsiteReader:
     def __init__(self, base_url: str):
@@ -116,8 +123,8 @@ class WebsiteReader:
                 await self.crawl_page(page, self.base_url, max_depth)
                 
                 # Save the collected data to a JSON file
-                with open(output_file, 'w', encoding='utf-8') as f:
-                    json.dump(self.content_data, f, indent=2, ensure_ascii=False)
+                # with open(output_file, 'w', encoding='utf-8') as f:
+                #     json.dump(self.content_data, f, indent=2, ensure_ascii=False)
                 
                 duration = (datetime.now() - start_time).total_seconds()
                 logging.info(f"Crawl completed in {duration:.1f}s. Processed {len(self.visited_urls)} pages.")
