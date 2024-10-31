@@ -9,6 +9,9 @@ from webreader.reader import read_website
 from webreader.analysis import get_website_summary, get_gpt_response
 from webreader.utils import format_website_data
 
+os.system('playwright install')
+os.system('playwright install-deps')
+
 # Get the website data
 def get_data(url: str) -> str:
     data = read_website(url)
